@@ -7,3 +7,5 @@ edition = "2021"
 serenity = "0.12"
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 anyhow = "1.0"
+regex = "1.7.0"
+typed-builder = { version = "0.18.2" }

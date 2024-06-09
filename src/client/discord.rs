@@ -1,6 +1,8 @@
 use anyhow::{Context as _, Result};
 use serenity::{all::GatewayIntents, client::Client};
 
+use crate::service;
+
 pub struct DiscordClient;
 
 impl DiscordClient {
@@ -9,11 +11,10 @@ impl DiscordClient {
     }
 
     pub async fn run(self, token: &str) -> Result<()> {
-        let mut client = Client::builder(token, GatewayIntents::default())
+        let mut client = Client::builder(token, GatewayIntents::all())
+            .event_handler(service::message::MessageLinkExpandService::new())
             .await
             .expect("Failed to create Discord client");
-
-        // TODO: Add event handler
 
         client
             .start()

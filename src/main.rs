@@ -2,6 +2,7 @@ use anyhow::{Ok, Result};
 
 mod client;
 mod config;
+mod service;
 
 fn main() -> Result<()> {
     tokio::runtime::Builder::new_multi_thread()
