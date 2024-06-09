@@ -4,6 +4,10 @@ use serenity::{all::GatewayIntents, client::Client};
 pub struct DiscordClient;
 
 impl DiscordClient {
+    pub fn new() -> Self {
+        Self
+    }
+
     pub async fn run(self, token: &str) -> Result<()> {
         let mut client = Client::builder(token, GatewayIntents::default())
             .await
