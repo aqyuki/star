@@ -7,8 +7,9 @@ COPY --chown=root:root . .
 RUN cargo build --release --bin star
 
 #==================== Runner ====================
-FROM gcr.io/distroless/base-debian12 as runner
+FROM gcr.io/distroless/cc-debian12 as runner
 
-COPY --from=builder --chown=root:root /root/app/target/release/star /usr/local/bin/star
+WORKDIR /root/app
+COPY --from=builder --chown=root:root /root/app/target/release/star ./star
 
-ENTRYPOINT ["sh",  "-c", "star"]
+ENTRYPOINT ["./star"]
