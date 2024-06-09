@@ -5,6 +5,7 @@ mod config;
 mod service;
 
 fn main() -> Result<()> {
+    config::init_logger();
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
