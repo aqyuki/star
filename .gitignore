@@ -10,5 +10,7 @@ target/
 *.pdb
 
 # Added by cargo
-
 /target
+
+# environment file
+.env
