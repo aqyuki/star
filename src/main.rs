@@ -1,4 +1,5 @@
 use anyhow::{Ok, Result};
+use log::debug;
 
 mod client;
 mod config;
@@ -15,6 +16,7 @@ fn main() -> Result<()> {
 
 async fn async_main() -> Result<()> {
     let token = config::load_discord_token();
+    debug!("Discord Token : {}", token);
     let client = client::discord::DiscordClient::new();
     client.run(&token).await?;
     Ok(())

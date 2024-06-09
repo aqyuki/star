@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::{debug, error, info, warn};
 use regex::Regex;
 use serenity::{
     all::{
@@ -50,55 +51,87 @@ impl MessageLinkExpandService {
 impl EventHandler for MessageLinkExpandService {
     async fn message(&self, ctx: Context, message: Message) {
         if message.author.bot {
+            info!("skip message expand because this message is from bot");
             return;
         }
 
         let result = self.extract_message_link(message.content.as_str());
         let link = match result {
             Some(link) => link,
-            None => return,
+            None => {
+                info!("skip message expand because this message does not contain link");
+                return;
+            }
         };
+        debug!("Extracted link: {}", link);
 
         let guild_id = match self.extract_guild_id(&link) {
             Some(guild_id) => guild_id,
-            None => return,
+            None => {
+                warn!("skip message expand because failed to extract guild_id");
+                return;
+            }
         };
+        debug!("Extracted guild_id: {}", guild_id);
 
         let msg_guild_id = match message.guild_id {
             Some(guild_id) => guild_id.to_string(),
-            None => return,
+            None => {
+                warn!("skip message expand because failed to extract message guild_id");
+                return;
+            }
         };
+        debug!("Extracted message guild_id: {}", msg_guild_id);
 
         // if not the same guild, return
         if guild_id != msg_guild_id {
+            info!("skip message expand because the guild_id({}) is not the same as the message guild_id({})", guild_id, msg_guild_id);
             return;
         }
 
         let channel_id = match self.extract_channel_id(&link) {
             Some(channel_id) => channel_id.parse::<u64>().unwrap(),
-            None => return,
+            None => {
+                warn!("skip message expand because failed to extract channel_id");
+                return;
+            }
         };
+        debug!("Extracted channel_id: {}", channel_id);
 
         let parsed_guild_id = guild_id.parse::<u64>().unwrap();
+        debug!("Parsed guild_id: {}", parsed_guild_id);
+
         let citation_channel =
             match fetch_guild_channel_info(&ctx, parsed_guild_id, channel_id).await {
                 Ok(ch) => ch,
-                Err(_) => return,
+                Err(why) => {
+                    error!("Failed to fetch channel info: {:?}", why);
+                    return;
+                }
             };
+        debug!("Fetched channel info: {:?}", citation_channel);
 
         // if citation_channel is nsfw, return
         if citation_channel.nsfw {
+            info!("skip message expand because the channel is nsfw");
             return;
         }
 
         let message_id = match self.extract_message_id(&link) {
             Some(message_id) => message_id.parse::<u64>().unwrap(),
-            None => return,
+            None => {
+                warn!("skip message expand because failed to extract message_id");
+                return;
+            }
         };
+        debug!("Extracted message_id: {}", message_id);
 
         let target_message = match fetch_message(&ctx, channel_id, message_id).await {
             Ok(msg) => msg,
-            Err(_) => return,
+            Err(why) => {
+                error!("Failed to fetch message: {:?}", why);
+                return;
+            }
         };
 
         // build reply message
@@ -106,6 +139,7 @@ impl EventHandler for MessageLinkExpandService {
             .name(target_message.author.name.clone())
             .icon_url(target_message.author.avatar_url())
             .build();
+        debug!("Author: {:?}", author);
 
         let attachment_image_url: Option<String> = if !target_message.attachments.is_empty() {
             target_message
@@ -115,6 +149,7 @@ impl EventHandler for MessageLinkExpandService {
         } else {
             None
         };
+        debug!("Attachment image url: {:?}", attachment_image_url);
 
         let sticker_url: Option<String> = if !target_message.sticker_items.is_empty() {
             target_message
@@ -124,6 +159,7 @@ impl EventHandler for MessageLinkExpandService {
         } else {
             None
         };
+        debug!("Sticker image url: {:?}", sticker_url);
 
         let citation_message = CitationMessage::builder()
             .content(target_message.content)
@@ -133,6 +169,7 @@ impl EventHandler for MessageLinkExpandService {
             .attachment_image_url(attachment_image_url)
             .sticker_image_url(sticker_url)
             .build();
+        debug!("Citation message: {:?}", citation_message);
 
         let embed = CreateEmbed::default()
             .description(citation_message.content)
@@ -145,19 +182,22 @@ impl EventHandler for MessageLinkExpandService {
             )
             .image(citation_message.attachment_image_url.unwrap_or_default())
             .thumbnail(citation_message.sticker_image_url.unwrap_or_default());
+        debug!("Embed: {:?}", embed);
 
         let mention = CreateAllowedMentions::default().replied_user(true);
         let reply_message = CreateMessage::default()
             .embed(embed)
             .reference_message(&message.clone())
             .allowed_mentions(mention);
+        debug!("Reply message: {:?}", reply_message);
 
         let result = message
             .channel_id
             .send_message(&ctx.http, reply_message)
             .await;
-        if let Err(why) = result {
-            println!("Error sending message: {:?}", why);
+        match result {
+            Ok(msg) => info!("Sent citation message: {:?}", msg),
+            Err(why) => error!("Failed to send citation message: {:?}", why),
         };
     }
 }
