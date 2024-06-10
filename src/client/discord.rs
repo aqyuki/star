@@ -13,6 +13,7 @@ impl DiscordClient {
     pub async fn run(self, token: &str) -> Result<()> {
         let mut client = Client::builder(token, GatewayIntents::all())
             .event_handler(service::message::MessageLinkExpandService::new())
+            .event_handler(service::message::MessageLinkExpandService::new())
             .await
             .expect("Failed to create Discord client");
 
