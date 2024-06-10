@@ -13,6 +13,7 @@ use serenity::{
         id::{ChannelId, GuildId},
     },
 };
+use std::time::Instant;
 use typed_builder::TypedBuilder;
 
 static LINK_PATTERN: &str = r"https://(?:ptb\.|canary\.)?discord(app)?\.com/channels/(?P<guild_id>\d+)/(?P<channel_id>\d+)/(?P<message_id>\d+)";
@@ -238,6 +239,32 @@ struct CitationMessage {
     pub create_at: Timestamp,
     pub attachment_image_url: Option<String>,
     pub sticker_image_url: Option<String>,
+}
+
+struct Timer {
+    start: Instant,
+    name: String,
+}
+
+impl Timer {
+    fn new(name: &str) -> Timer {
+        Timer {
+            start: Instant::now(),
+            name: name.to_string(),
+        }
+    }
+}
+
+impl Drop for Timer {
+    fn drop(&mut self) {
+        let elapsed = self.start.elapsed();
+        info!(
+            "{} took {}s {}ms",
+            self.name,
+            elapsed.as_secs(),
+            elapsed.subsec_millis()
+        );
+    }
 }
 
 #[cfg(test)]
