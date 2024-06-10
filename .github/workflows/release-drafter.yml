@@ -28,7 +28,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # PRのタイトルと内容をRelease内容に追加する
           RELEASE_TAG: ${{ github.event.pull_request.title }}
-        uses: release-drafter/release-drafter@v5
+        uses: release-drafter/release-drafter@v6
         with:
           tag: ${{ env.RELEASE_TAG }}
           name: Release ${{ env.RELEASE_TAG }}
