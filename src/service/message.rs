@@ -51,6 +51,8 @@ impl MessageLinkExpandService {
 #[async_trait]
 impl EventHandler for MessageLinkExpandService {
     async fn message(&self, ctx: Context, message: Message) {
+        let _timer = Timer::new("Message Link Expand Service");
+
         if message.author.bot {
             info!("skip message expand because this message is from bot");
             return;
