@@ -34,17 +34,20 @@ impl MessageLinkExpandService {
         caps.map(|caps| caps[0].to_string())
     }
 
-    fn extract_guild_id(&self, link: &str) -> Option<String> {
+    fn extract_discord_ids(&self, link: &str) -> Option<DiscordID> {
         let caps = self.rgx.captures(link);
-        caps.map(|caps| caps["guild_id"].to_string())
-    }
-    fn extract_channel_id(&self, link: &str) -> Option<String> {
-        let caps = self.rgx.captures(link);
-        caps.map(|caps| caps["channel_id"].to_string())
-    }
-    fn extract_message_id(&self, link: &str) -> Option<String> {
-        let caps = self.rgx.captures(link);
-        caps.map(|caps| caps["message_id"].to_string())
+        let guild = caps.as_ref().map(|caps| caps["guild_id"].to_string());
+        let channel = caps.as_ref().map(|caps| caps["channel_id"].to_string());
+        let message = caps.as_ref().map(|caps| caps["message_id"].to_string());
+
+        match (guild, channel, message) {
+            (Some(guild), Some(channel), Some(message)) => Some(DiscordID {
+                guild_id: guild.parse::<u64>().unwrap(),
+                channel_id: channel.parse::<u64>().unwrap(),
+                message_id: message.parse::<u64>().unwrap(),
+            }),
+            _ => None,
+        }
     }
 }
 
@@ -68,17 +71,17 @@ impl EventHandler for MessageLinkExpandService {
         };
         debug!("Extracted link: {}", link);
 
-        let guild_id = match self.extract_guild_id(&link) {
-            Some(guild_id) => guild_id,
+        let discord_id = match self.extract_discord_ids(&link) {
+            Some(discord_id) => discord_id,
             None => {
-                warn!("skip message expand because failed to extract guild_id");
+                warn!("skip message expand because failed to extract discord_id");
                 return;
             }
         };
-        debug!("Extracted guild_id: {}", guild_id);
+        debug!("Extracted discord_id: {:?}", discord_id);
 
-        let msg_guild_id = match message.guild_id {
-            Some(guild_id) => guild_id.to_string(),
+        let msg_guild_id: u64 = match message.guild_id {
+            Some(guild_id) => guild_id.into(),
             None => {
                 warn!("skip message expand because failed to extract message guild_id");
                 return;
@@ -87,31 +90,25 @@ impl EventHandler for MessageLinkExpandService {
         debug!("Extracted message guild_id: {}", msg_guild_id);
 
         // if not the same guild, return
-        if guild_id != msg_guild_id {
-            info!("skip message expand because the guild_id({}) is not the same as the message guild_id({})", guild_id, msg_guild_id);
+        if discord_id.guild_id != msg_guild_id {
+            info!("skip message expand because the guild_id({}) is not the same as the message guild_id({})", discord_id.guild_id, msg_guild_id);
             return;
         }
 
-        let channel_id = match self.extract_channel_id(&link) {
-            Some(channel_id) => channel_id.parse::<u64>().unwrap(),
-            None => {
-                warn!("skip message expand because failed to extract channel_id");
+        // TODO: change to cache
+        let citation_channel = match fetch_guild_channel_info(
+            &ctx,
+            discord_id.guild_id,
+            discord_id.channel_id,
+        )
+        .await
+        {
+            Ok(ch) => ch,
+            Err(why) => {
+                error!("Failed to fetch channel info: {:?}", why);
                 return;
             }
         };
-        debug!("Extracted channel_id: {}", channel_id);
-
-        let parsed_guild_id = guild_id.parse::<u64>().unwrap();
-        debug!("Parsed guild_id: {}", parsed_guild_id);
-
-        let citation_channel =
-            match fetch_guild_channel_info(&ctx, parsed_guild_id, channel_id).await {
-                Ok(ch) => ch,
-                Err(why) => {
-                    error!("Failed to fetch channel info: {:?}", why);
-                    return;
-                }
-            };
         debug!("Fetched channel info: {:?}", citation_channel);
 
         // if citation_channel is nsfw, return
@@ -120,22 +117,14 @@ impl EventHandler for MessageLinkExpandService {
             return;
         }
 
-        let message_id = match self.extract_message_id(&link) {
-            Some(message_id) => message_id.parse::<u64>().unwrap(),
-            None => {
-                warn!("skip message expand because failed to extract message_id");
-                return;
-            }
-        };
-        debug!("Extracted message_id: {}", message_id);
-
-        let target_message = match fetch_message(&ctx, channel_id, message_id).await {
-            Ok(msg) => msg,
-            Err(why) => {
-                error!("Failed to fetch message: {:?}", why);
-                return;
-            }
-        };
+        let target_message =
+            match fetch_message(&ctx, discord_id.channel_id, discord_id.message_id).await {
+                Ok(msg) => msg,
+                Err(why) => {
+                    error!("Failed to fetch message: {:?}", why);
+                    return;
+                }
+            };
 
         // build reply message
         let author = CitationMessageAuthor::builder()
@@ -227,6 +216,13 @@ async fn fetch_message(ctx: &Context, raw_channel_id: u64, raw_message_id: u64) 
     Ok(message)
 }
 
+#[derive(Debug, TypedBuilder, PartialEq)]
+struct DiscordID {
+    pub guild_id: u64,
+    pub channel_id: u64,
+    pub message_id: u64,
+}
+
 #[derive(Debug, TypedBuilder)]
 struct CitationMessageAuthor {
     pub name: String,
@@ -313,26 +309,17 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_guild_id() {
+    fn test_extract_discord_id() {
         let service = super::MessageLinkExpandService::new();
         let link = "https://discord.com/channels/123/456/789";
-        let result = service.extract_guild_id(link);
-        assert_eq!(result, Some("123".to_string()));
-    }
-
-    #[test]
-    fn test_extract_channel_id() {
-        let service = super::MessageLinkExpandService::new();
-        let link = "https://discord.com/channels/123/456/789";
-        let result = service.extract_channel_id(link);
-        assert_eq!(result, Some("456".to_string()));
-    }
-
-    #[test]
-    fn test_extract_message_id() {
-        let service = super::MessageLinkExpandService::new();
-        let link = "https://discord.com/channels/123/456/789";
-        let result = service.extract_message_id(link);
-        assert_eq!(result, Some("789".to_string()));
+        let result = service.extract_discord_ids(link);
+        assert_eq!(
+            result,
+            Some(super::DiscordID {
+                guild_id: 123,
+                channel_id: 456,
+                message_id: 789
+            })
+        );
     }
 }
