@@ -4,7 +4,7 @@ use regex::Regex;
 use serenity::{
     all::{
         CreateAllowedMentions, CreateEmbed, CreateEmbedAuthor, CreateEmbedFooter, CreateMessage,
-        Timestamp,
+        MessageId, Timestamp,
     },
     async_trait,
     client::{Context, EventHandler},
@@ -20,12 +20,16 @@ static LINK_PATTERN: &str = r"https://(?:ptb\.|canary\.)?discord(app)?\.com/chan
 
 pub struct MessageLinkExpandService {
     rgx: Regex,
+    cache: moka::future::Cache<u64, GuildChannel>,
 }
 
 impl MessageLinkExpandService {
     pub fn new() -> Self {
         Self {
             rgx: Regex::new(LINK_PATTERN).expect("Failed to compile regex"),
+            cache: moka::future::CacheBuilder::new(100)
+                .time_to_idle(std::time::Duration::from_secs(60 * 60))
+                .build(),
         }
     }
 
@@ -43,9 +47,9 @@ impl MessageLinkExpandService {
         match (guild, channel, message) {
             (Some(guild), Some(channel), Some(message)) => Some(
                 DiscordID::builder()
-                    .guild_id(guild.parse::<u64>().unwrap_or_default())
-                    .channel_id(channel.parse::<u64>().unwrap_or_default())
-                    .message_id(message.parse::<u64>().unwrap_or_default())
+                    .guild_id(GuildId::new(guild.parse::<u64>().unwrap_or_default()))
+                    .channel_id(ChannelId::new(channel.parse::<u64>().unwrap_or_default()))
+                    .message_id(MessageId::new(message.parse::<u64>().unwrap_or_default()))
                     .build(),
             ),
             _ => None,
@@ -198,11 +202,9 @@ impl EventHandler for MessageLinkExpandService {
 
 async fn fetch_guild_channel_info(
     ctx: &Context,
-    raw_guild_id: u64,
-    raw_channel_id: u64,
+    guild_id: GuildId,
+    channel_id: ChannelId,
 ) -> Result<GuildChannel> {
-    let guild_id = GuildId::new(raw_guild_id);
-    let channel_id = ChannelId::new(raw_channel_id);
     if let Some(ch) = guild_id.channels(&ctx.http).await?.get(&channel_id) {
         Ok(ch.clone())
     } else {
@@ -210,9 +212,11 @@ async fn fetch_guild_channel_info(
     }
 }
 
-async fn fetch_message(ctx: &Context, raw_channel_id: u64, raw_message_id: u64) -> Result<Message> {
-    let channel_id = ChannelId::new(raw_channel_id);
-    let message_id = raw_message_id;
+async fn fetch_message(
+    ctx: &Context,
+    channel_id: ChannelId,
+    message_id: MessageId,
+) -> Result<Message> {
     let channel = channel_id.to_channel(&ctx.http).await?.guild().unwrap();
     let message = channel.message(&ctx.http, message_id).await?;
     Ok(message)
@@ -220,9 +224,9 @@ async fn fetch_message(ctx: &Context, raw_channel_id: u64, raw_message_id: u64) 
 
 #[derive(Debug, TypedBuilder, PartialEq)]
 struct DiscordID {
-    pub guild_id: u64,
-    pub channel_id: u64,
-    pub message_id: u64,
+    pub guild_id: GuildId,
+    pub channel_id: ChannelId,
+    pub message_id: MessageId,
 }
 
 #[derive(Debug, TypedBuilder)]
@@ -269,6 +273,8 @@ impl Drop for Timer {
 
 #[cfg(test)]
 mod tests {
+    use serenity::all::{ChannelId, GuildId, MessageId};
+
     #[test]
     fn test_extract_message_link_only_link() {
         let service = super::MessageLinkExpandService::new();
@@ -318,9 +324,9 @@ mod tests {
         assert_eq!(
             result,
             Some(super::DiscordID {
-                guild_id: 123,
-                channel_id: 456,
-                message_id: 789
+                guild_id: GuildId::new(123),
+                channel_id: ChannelId::new(456),
+                message_id: MessageId::new(789)
             })
         );
     }
