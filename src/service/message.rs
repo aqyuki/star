@@ -41,11 +41,13 @@ impl MessageLinkExpandService {
         let message = caps.as_ref().map(|caps| caps["message_id"].to_string());
 
         match (guild, channel, message) {
-            (Some(guild), Some(channel), Some(message)) => Some(DiscordID {
-                guild_id: guild.parse::<u64>().unwrap(),
-                channel_id: channel.parse::<u64>().unwrap(),
-                message_id: message.parse::<u64>().unwrap(),
-            }),
+            (Some(guild), Some(channel), Some(message)) => Some(
+                DiscordID::builder()
+                    .guild_id(guild.parse::<u64>().unwrap_or_default())
+                    .channel_id(channel.parse::<u64>().unwrap_or_default())
+                    .message_id(message.parse::<u64>().unwrap_or_default())
+                    .build(),
+            ),
             _ => None,
         }
     }
