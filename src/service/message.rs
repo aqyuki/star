@@ -20,7 +20,7 @@ static LINK_PATTERN: &str = r"https://(?:ptb\.|canary\.)?discord(app)?\.com/chan
 
 pub struct MessageLinkExpandService {
     rgx: Regex,
-    cache: moka::future::Cache<u64, GuildChannel>,
+    cache: moka::future::Cache<ChannelId, GuildChannel>,
 }
 
 impl MessageLinkExpandService {
@@ -102,19 +102,27 @@ impl EventHandler for MessageLinkExpandService {
         }
 
         // TODO: change to cache
-        let citation_channel = match fetch_guild_channel_info(
-            &ctx,
-            discord_id.guild_id,
-            discord_id.channel_id,
-        )
-        .await
-        {
-            Ok(ch) => ch,
-            Err(why) => {
-                error!("Failed to fetch channel info: {:?}", why);
-                return;
+        let citation_channel = match self.cache.get(&discord_id.channel_id).await {
+            Some(ch) => ch,
+            None => {
+                let ch = match fetch_guild_channel_info(
+                    &ctx,
+                    discord_id.guild_id,
+                    discord_id.channel_id,
+                )
+                .await
+                {
+                    Ok(ch) => ch,
+                    Err(why) => {
+                        error!("Failed to fetch channel info: {:?}", why);
+                        return;
+                    }
+                };
+                self.cache.insert(discord_id.channel_id, ch.clone()).await;
+                ch
             }
         };
+
         debug!("Fetched channel info: {:?}", citation_channel);
 
         // if citation_channel is nsfw, return
