@@ -101,7 +101,6 @@ impl EventHandler for MessageLinkExpandService {
             return;
         }
 
-        // TODO: change to cache
         let citation_channel = match self.cache.get(&discord_id.channel_id).await {
             Some(ch) => ch,
             None => {
