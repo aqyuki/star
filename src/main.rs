@@ -3,7 +3,7 @@ use log::debug;
 
 mod client;
 mod config;
-mod service;
+mod feature;
 
 fn main() -> Result<()> {
     config::init_logger();
