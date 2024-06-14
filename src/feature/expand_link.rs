@@ -233,3 +233,25 @@ struct CitationMessage {
     pub attachment_image_url: Option<String>,
     pub sticker_image_url: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use serenity::all::{ChannelId, GuildId, MessageId};
+
+    use crate::feature::expand_link::DiscordID;
+
+    #[test]
+    fn test_extract_discord_id() {
+        let service = super::MessageLinkExpandService::new();
+        let link = "https://discord.com/channels/123/456/789";
+        let result = service.extract_discord_ids(link);
+        assert_eq!(
+            result,
+            Some(DiscordID {
+                guild: GuildId::new(123),
+                channel: ChannelId::new(456),
+                message: MessageId::new(789)
+            })
+        );
+    }
+}
