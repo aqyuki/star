@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/aqyuki/star/compare/v1.3.0...v1.3.1) (2024-06-28)
+
+
+### Bug Fixes
+
+* **deps:** update rust crate log to v0.4.22 ([#34](https://github.com/aqyuki/star/issues/34)) ([fe63aa4](https://github.com/aqyuki/star/commit/fe63aa43a8b1e753b5d744593865c175fc9dc86b))
+
 ## [1.3.0](https://github.com/aqyuki/star/compare/v1.2.0...v1.3.0) (2024-06-12)
 
 
